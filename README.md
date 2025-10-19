@@ -4,6 +4,9 @@
 
 基于树莓派和SSD1306 OLED屏的实时监控系统
 
+## 演示效果
+<img src="images/oled_dashboard.gif" alt="OLED 仪表盘演示" width="500">
+
 ## 功能
 - 系统信息：CPU温度、内存、磁盘、运行时间
 - 天气数据：温度、湿度、风速、天气状况
