@@ -13,18 +13,26 @@ from luma.oled.device import ssd1306
 from luma.core.render import canvas
 from PIL import ImageFont, ImageDraw
 
+# =========================
 # 常量定义
-DISPLAY_WIDTH = 128  # OLED屏幕宽度(像素)
-DISPLAY_HEIGHT = 64  # OLED屏幕高度(像素)
-I2C_ADDRESS = 0x3C  # OLED设备I2C地址
-REFRESH_RATE = 0.1  # 屏幕刷新间隔(秒)
-PAGE_SWITCH_INTERVAL = 5  # 页面切换间隔(秒)
-WEATHER_REFRESH_INTERVAL = 60  # 天气信息刷新间隔(秒)
-WEATHER_API_KEY = "your_api_key_here"  # OpenWeatherMap API密钥
-LATITUDE = "39.7228"  # 北京建筑大学大兴校区纬度
-LONGITUDE = "116.3478"  # 北京建筑大学大兴校区经度
-WEATHER_URL = f"http://api.openweathermap.org/data/2.5/weather?lat={LATITUDE}&lon={LONGITUDE}&appid={WEATHER_API_KEY}&units=metric"
+# =========================
+DISPLAY_WIDTH = 128                # OLED屏幕宽度(像素)
+DISPLAY_HEIGHT = 64                # OLED屏幕高度(像素)
+I2C_ADDRESS = 0x3C                  # OLED设备I2C地址
+REFRESH_RATE = 0.1                  # 屏幕刷新间隔(秒)
+PAGE_SWITCH_INTERVAL = 5            # 页面切换间隔(秒)
+WEATHER_REFRESH_INTERVAL = 60       # 天气信息刷新间隔(秒)
+WEATHER_API_KEY = "9b02f684888deb143d54343a65c7833b"  # 天气API密钥
+LATITUDE = "39.7228"                 # 纬度
+LONGITUDE = "116.3478"               # 经度
+WEATHER_URL = (
+    f"http://api.openweathermap.org/data/2.5/weather?"
+    f"lat={LATITUDE}&lon={LONGITUDE}&appid={WEATHER_API_KEY}&units=metric"
+)
 
+# =========================
+# 初始化 OLED
+# =========================
 def init_oled():
     """初始化OLED屏幕"""
     try:
@@ -36,6 +44,9 @@ def init_oled():
         print(f"OLED初始化失败: {str(e)}")
         raise
 
+# =========================
+# 系统信息获取函数
+# =========================
 def get_interface_ip(iface='wlan0'):
     """获取网络接口IP地址"""
     try:
@@ -89,14 +100,15 @@ def get_uptime():
     except:
         return "N/A"
 
+# =========================
+# 天气信息
+# =========================
 def get_weather():
     """从OpenWeatherMap获取天气信息"""
     try:
         response = requests.get(WEATHER_URL, timeout=5)
-        response.raise_for_status()  # 检查HTTP错误
-        
+        response.raise_for_status()
         data = response.json()
-        
         return {
             'location': 'BUCEA',
             'temp': data['main']['temp'],
@@ -112,6 +124,9 @@ def get_weather():
         print(f"天气数据解析失败: {str(e)}")
         return None
 
+# =========================
+# 字体初始化
+# =========================
 def init_fonts():
     """初始化字体配置"""
     try:
@@ -125,15 +140,17 @@ def init_fonts():
         font_large = ImageFont.load_default()
     return font_small, font_medium, font_large
 
-def draw_status(page_num, device, fonts, weather_data):
+# =========================
+# 绘制状态信息
+# =========================
+def draw_status(page_num, device, fonts, weather_data, weather_update_time):
     """在OLED屏幕上绘制状态信息"""
     font_small, font_medium, font_large = fonts
-    
     try:
-        # 获取当前系统信息
         now = datetime.now()
         current_date = now.strftime("%Y-%m-%d")
         current_time = now.strftime("%H:%M:%S")
+        weather_update_time = time.strftime("%H:%M:%S", time.localtime(weather_update_time))
         eth0_ip = get_interface_ip('eth0')
         wlan0_ip = get_interface_ip('wlan0')
         hostname = get_hostname()
@@ -143,51 +160,33 @@ def draw_status(page_num, device, fonts, weather_data):
         uptime = get_uptime()
 
         with canvas(device) as draw:
-            # 绘制屏幕边框
             draw.rectangle((0, 0, DISPLAY_WIDTH-1, DISPLAY_HEIGHT-1), outline="white")
-            
-            # 页面1: 基本系统信息
-            if page_num == 0:
-                # 第一行: 主机名和日期
-                draw.text((2, 0), f"HOST:{hostname}", font=font_small, fill="white")
+
+            if page_num == 0:  # 页面1
+                draw.text((2, 0),  f"HOST:{hostname}", font=font_small, fill="white")
                 draw.text((2, 10), f"DATE:{current_date}", font=font_small, fill="white")
-                
-                # 第二行: IP地址
-                draw.text((2, 20), f"IP ADDRESS:", font=font_small, fill="white")
+                draw.text((2, 20), "IP ADDRESS:", font=font_small, fill="white")
                 draw.text((2, 30), f"ETH: {eth0_ip}", font=font_small, fill="white")
                 draw.text((2, 40), f"WIFI:{wlan0_ip}", font=font_small, fill="white")
 
-            # 页面2: 网络和运行时间
-            elif page_num == 1:
-                # 第三行: 系统状态
-                draw.text((2, 0), f"CPU:{cpu_temp}", font=font_small, fill="white")
+            elif page_num == 1:  # 页面2
+                draw.text((2, 0),  f"CPU:{cpu_temp}", font=font_small, fill="white")
                 draw.text((2, 10), f"MEM:{mem_usage}", font=font_small, fill="white")
-                
-                # 第四行: 存储和运行时间
                 draw.text((2, 20), f"DISK:{disk_usage}", font=font_small, fill="white")
                 draw.text((2, 30), f"UPTIME:{uptime}", font=font_small, fill="white")
 
-            # 页面3: 天气信息
-            elif page_num == 2:
+            elif page_num == 2:  # 页面3: 天气信息
                 if weather_data:
-                    # 显示天气信息(两行)
-                    draw.text((2, 0), f"{weather_data['location']}:{weather_data['description']}", 
-                             font=font_small, fill="white")
-                    draw.text((2, 10), f"Temp:{weather_data['temp']:.1f} °C", 
-                             font=font_small, fill="white")
-                    draw.text((2, 20), f"FL: {weather_data['feels_like']:.1f} °C", 
-                            font=font_small, fill="white")
-                    draw.text((2, 30), f"Humid:{weather_data['humidity']} %", 
-                             font=font_small, fill="white")
-                    draw.text((2, 40), f"Wind:{weather_data['wind']} m/s", 
-                             font=font_small, fill="white")
+                    draw.text((2, 0),  f"{weather_data['location']}:{weather_data['description']}", font=font_small, fill="white")
+                    draw.text((2, 10), f"T:{weather_data['temp']:.1f} °C", font=font_small, fill="white")
+                    draw.text((64, 10), f"H:{weather_data['humidity']} %", font=font_small, fill="white")
+                    draw.text((2, 20), f"FL: {weather_data['feels_like']:.1f} °C", font=font_small, fill="white")
+                    draw.text((2, 30), f"Wind:{weather_data['wind']} m/s", font=font_small, fill="white")
+                    draw.text((2, 40), f"UpdatedTime:{weather_update_time}", font=font_small, fill="white")
                 else:
-                    # 天气获取失败时显示提示
                     draw.text((10, 20), "Weather: Failed", font=font_medium, fill="white")
-                    draw.text((10, 40), current_time, font=font_medium, fill="white")
 
-            draw.line((0, 52, DISPLAY_WIDTH, 52), fill="white")  # 分割线
-            # 页脚: 显示页码和当前时间
+            draw.line((0, 52, DISPLAY_WIDTH, 52), fill="white")
             draw.text((2, 51), f"Page {page_num+1}/3 {current_time}", font=font_small, fill="white")
 
     except Exception as e:
@@ -197,48 +196,46 @@ def draw_status(page_num, device, fonts, weather_data):
             draw.text((10, 20), "SYSTEM ERROR", font=font_large, fill="white")
             draw.text((10, 40), "Check logs", font=font_medium, fill="white")
 
+# =========================
+# 主程序
+# =========================
 def main():
-    """主程序"""
     try:
-        # 初始化OLED屏幕
         device = init_oled()
-        # 初始化字体
         fonts = init_fonts()
-        # 当前页面索引
         current_page = 0
-        # 上次页面切换时间
         last_page_switch = time.time()
-        # 上次天气刷新时间
         last_weather_refresh = 0
-        # 天气数据缓存
         weather_data = None
-        
+
         print("OLED系统监控已启动. 按Ctrl+C退出...")
-        
+
         while True:
-            current_time = time.time()
-            
-            # 每60秒刷新天气数据
-            if current_time - last_weather_refresh > WEATHER_REFRESH_INTERVAL:
+            current_time_ts = time.time()
+
+            if current_time_ts - last_weather_refresh > WEATHER_REFRESH_INTERVAL:
+                valid_weather_data = weather_data
                 weather_data = get_weather()
-                last_weather_refresh = current_time
-            
-            # 每3秒切换页面
-            if current_time - last_page_switch > PAGE_SWITCH_INTERVAL:
+                if not weather_data:
+                    weather_data = valid_weather_data
+                else:
+                    weather_update_time = current_time_ts
+                last_weather_refresh = current_time_ts
+
+            if current_time_ts - last_page_switch > PAGE_SWITCH_INTERVAL:
                 current_page = (current_page + 1) % 3
-                last_page_switch = current_time
-            
-            # 绘制当前页面
-            draw_status(current_page, device, fonts, weather_data)
-            
+                last_page_switch = current_time_ts
+
+            # current_page = 2  # 当前锁定为天气页面
+
+            draw_status(current_page, device, fonts, weather_data, weather_update_time)
             time.sleep(REFRESH_RATE)
-            
+
     except KeyboardInterrupt:
         print("\n程序被用户中断")
     except Exception as e:
         print(f"致命错误: {str(e)}")
     finally:
-        # 程序退出前清理屏幕
         try:
             with canvas(device) as draw:
                 draw.rectangle((0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT), fill="black")
@@ -246,5 +243,8 @@ def main():
         except:
             pass
 
+# =========================
+# 程序入口
+# =========================
 if __name__ == "__main__":
     main()
