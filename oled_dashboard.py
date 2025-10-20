@@ -6,12 +6,11 @@ import netifaces
 import socket
 import psutil
 import requests
-import json
 from datetime import datetime
 from luma.core.interface.serial import i2c
 from luma.oled.device import ssd1306
 from luma.core.render import canvas
-from PIL import ImageFont, ImageDraw
+from PIL import ImageFont
 
 # =========================
 # 常量定义
@@ -19,12 +18,12 @@ from PIL import ImageFont, ImageDraw
 DISPLAY_WIDTH = 128                # OLED屏幕宽度(像素)
 DISPLAY_HEIGHT = 64                # OLED屏幕高度(像素)
 I2C_ADDRESS = 0x3C                  # OLED设备I2C地址
-REFRESH_RATE = 0.1                  # 屏幕刷新间隔(秒)
+REFRESH_RATE = 0.5                  # 刷新间隔(秒)
 PAGE_SWITCH_INTERVAL = 5            # 页面切换间隔(秒)
-WEATHER_REFRESH_INTERVAL = 60       # 天气信息刷新间隔(秒)
-WEATHER_API_KEY = "your_token"  # 天气API密钥
-LATITUDE = "39.7228"                 # 纬度
-LONGITUDE = "116.3478"               # 经度
+WEATHER_REFRESH_INTERVAL = 60       # 天气刷新间隔(秒)
+WEATHER_API_KEY = "your_token"      # 天气API密钥
+LATITUDE = "39.7228"
+LONGITUDE = "116.3478"
 WEATHER_URL = (
     f"http://api.openweathermap.org/data/2.5/weather?"
     f"lat={LATITUDE}&lon={LONGITUDE}&appid={WEATHER_API_KEY}&units=metric"
@@ -34,7 +33,6 @@ WEATHER_URL = (
 # 初始化 OLED
 # =========================
 def init_oled():
-    """初始化OLED屏幕"""
     try:
         serial = i2c(port=1, address=I2C_ADDRESS)
         device = ssd1306(serial, width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT)
@@ -48,7 +46,6 @@ def init_oled():
 # 系统信息获取函数
 # =========================
 def get_interface_ip(iface='wlan0'):
-    """获取网络接口IP地址"""
     try:
         addrs = netifaces.ifaddresses(iface)
         return addrs[netifaces.AF_INET][0]['addr']
@@ -56,14 +53,12 @@ def get_interface_ip(iface='wlan0'):
         return "N/A"
 
 def get_hostname():
-    """获取设备主机名"""
     try:
         return socket.gethostname()
     except:
         return "UNKNOWN"
 
 def get_cpu_temp():
-    """获取CPU温度(摄氏度)"""
     try:
         with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
             temp = int(f.read()) / 1000
@@ -72,7 +67,6 @@ def get_cpu_temp():
         return "N/A"
 
 def get_memory_usage():
-    """获取内存使用百分比"""
     try:
         mem = psutil.virtual_memory()
         return f"{mem.percent}%"
@@ -80,7 +74,6 @@ def get_memory_usage():
         return "N/A"
 
 def get_disk_usage():
-    """获取磁盘空间使用情况"""
     try:
         disk = psutil.disk_usage('/')
         used = disk.used / (1024**3)
@@ -90,7 +83,6 @@ def get_disk_usage():
         return "N/A"
 
 def get_uptime():
-    """获取系统运行时间"""
     try:
         uptime = datetime.now() - datetime.fromtimestamp(psutil.boot_time())
         days = uptime.days
@@ -100,11 +92,16 @@ def get_uptime():
     except:
         return "N/A"
 
+def get_network_speed(prev, interval):
+    counters = psutil.net_io_counters()
+    sent_speed = (counters.bytes_sent - prev['bytes_sent']) / interval / 1024
+    recv_speed = (counters.bytes_recv - prev['bytes_recv']) / interval / 1024
+    return sent_speed, recv_speed, counters
+
 # =========================
 # 天气信息
 # =========================
 def get_weather():
-    """从OpenWeatherMap获取天气信息"""
     try:
         response = requests.get(WEATHER_URL, timeout=5)
         response.raise_for_status()
@@ -128,7 +125,6 @@ def get_weather():
 # 字体初始化
 # =========================
 def init_fonts():
-    """初始化字体配置"""
     try:
         font_small = ImageFont.truetype("DejaVuSansMono.ttf", 10)
         font_medium = ImageFont.truetype("DejaVuSansMono.ttf", 12)
@@ -143,14 +139,13 @@ def init_fonts():
 # =========================
 # 绘制状态信息
 # =========================
-def draw_status(page_num, device, fonts, weather_data, weather_update_time):
-    """在OLED屏幕上绘制状态信息"""
+def draw_status(page_num, device, fonts, weather_data, weather_update_time, net_up=0.0, net_down=0.0):
     font_small, font_medium, font_large = fonts
     try:
         now = datetime.now()
         current_date = now.strftime("%Y-%m-%d")
         current_time = now.strftime("%H:%M:%S")
-        weather_update_time = time.strftime("%H:%M:%S", time.localtime(weather_update_time))
+        weather_update_time_str = time.strftime("%H:%M:%S", time.localtime(weather_update_time))
         eth0_ip = get_interface_ip('eth0')
         wlan0_ip = get_interface_ip('wlan0')
         hostname = get_hostname()
@@ -169,11 +164,13 @@ def draw_status(page_num, device, fonts, weather_data, weather_update_time):
                 draw.text((2, 30), f"ETH: {eth0_ip}", font=font_small, fill="white")
                 draw.text((2, 40), f"WIFI:{wlan0_ip}", font=font_small, fill="white")
 
-            elif page_num == 1:  # 页面2
+            elif page_num == 1:  # 页面2（系统 + 网络速率）
                 draw.text((2, 0),  f"CPU:{cpu_temp}", font=font_small, fill="white")
                 draw.text((2, 10), f"MEM:{mem_usage}", font=font_small, fill="white")
                 draw.text((2, 20), f"DISK:{disk_usage}", font=font_small, fill="white")
                 draw.text((2, 30), f"UPTIME:{uptime}", font=font_small, fill="white")
+                draw.text((2, 40), f"U:{net_up:.1f}KB/s", font=font_small, fill="white")
+                draw.text((64, 40), f"D:{net_down:.1f}KB/s", font=font_small, fill="white")
 
             elif page_num == 2:  # 页面3: 天气信息
                 if weather_data:
@@ -182,7 +179,7 @@ def draw_status(page_num, device, fonts, weather_data, weather_update_time):
                     draw.text((64, 10), f"H:{weather_data['humidity']} %", font=font_small, fill="white")
                     draw.text((2, 20), f"FL: {weather_data['feels_like']:.1f} °C", font=font_small, fill="white")
                     draw.text((2, 30), f"Wind:{weather_data['wind']} m/s", font=font_small, fill="white")
-                    draw.text((2, 40), f"UpdatedTime:{weather_update_time}", font=font_small, fill="white")
+                    draw.text((2, 40), f"Updated:{weather_update_time_str}", font=font_small, fill="white")
                 else:
                     draw.text((10, 20), "Weather: Failed", font=font_medium, fill="white")
 
@@ -194,7 +191,6 @@ def draw_status(page_num, device, fonts, weather_data, weather_update_time):
         with canvas(device) as draw:
             draw.rectangle((0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT), fill="black")
             draw.text((10, 20), "SYSTEM ERROR", font=font_large, fill="white")
-            draw.text((10, 40), "Check logs", font=font_medium, fill="white")
 
 # =========================
 # 主程序
@@ -207,12 +203,21 @@ def main():
         last_page_switch = time.time()
         last_weather_refresh = 0
         weather_data = None
+        weather_update_time = 0
+
+        # 网络速度初始化
+        prev_net = {
+            'bytes_sent': psutil.net_io_counters().bytes_sent,
+            'bytes_recv': psutil.net_io_counters().bytes_recv
+        }
+        prev_time = time.time()
 
         print("OLED系统监控已启动. 按Ctrl+C退出...")
 
         while True:
             current_time_ts = time.time()
 
+            # 天气刷新
             if current_time_ts - last_weather_refresh > WEATHER_REFRESH_INTERVAL:
                 valid_weather_data = weather_data
                 weather_data = get_weather()
@@ -222,13 +227,19 @@ def main():
                     weather_update_time = current_time_ts
                 last_weather_refresh = current_time_ts
 
+            # 页面切换
             if current_time_ts - last_page_switch > PAGE_SWITCH_INTERVAL:
                 current_page = (current_page + 1) % 3
                 last_page_switch = current_time_ts
 
-            # current_page = 2  # 当前锁定为天气页面
+            # 网络速率计算
+            interval = current_time_ts - prev_time
+            net_up, net_down, counters = get_network_speed(prev_net, interval)
+            prev_net = {'bytes_sent': counters.bytes_sent, 'bytes_recv': counters.bytes_recv}
+            prev_time = current_time_ts
 
-            draw_status(current_page, device, fonts, weather_data, weather_update_time)
+            # 绘制显示
+            draw_status(current_page, device, fonts, weather_data, weather_update_time, net_up, net_down)
             time.sleep(REFRESH_RATE)
 
     except KeyboardInterrupt:
