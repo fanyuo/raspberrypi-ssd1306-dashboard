@@ -166,11 +166,11 @@ def draw_status(page_num, device, fonts, weather_data, weather_update_time, net_
 
             elif page_num == 1:  # 页面2（系统 + 网络速率）
                 draw.text((2, 0),  f"CPU:{cpu_temp}", font=font_small, fill="white")
-                draw.text((2, 10), f"MEM:{mem_usage}", font=font_small, fill="white")
-                draw.text((2, 20), f"DISK:{disk_usage}", font=font_small, fill="white")
-                draw.text((2, 30), f"UPTIME:{uptime}", font=font_small, fill="white")
-                draw.text((2, 40), f"U:{net_up:.1f}KB/s", font=font_small, fill="white")
-                draw.text((64, 40), f"D:{net_down:.1f}KB/s", font=font_small, fill="white")
+                draw.text((65, 0), f"MEM:{mem_usage}", font=font_small, fill="white")
+                draw.text((2, 10), f"DISK:{disk_usage}", font=font_small, fill="white")
+                draw.text((2, 20), f"UPTIME:{uptime}", font=font_small, fill="white")
+                draw.text((2, 30), f"Net U:{net_up:.1f}KB/s", font=font_small, fill="white")
+                draw.text((2, 40), f"Net D:{net_down:.1f}KB/s", font=font_small, fill="white")
 
             elif page_num == 2:  # 页面3: 天气信息
                 if weather_data:
